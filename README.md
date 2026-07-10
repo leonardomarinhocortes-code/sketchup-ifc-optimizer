@@ -1,155 +1,155 @@
-# SketchUp IFC Optimizer
+# SketchUp IFC Optimizer (Limpador IFC)
 
-Shrink and clean **IFC files exported from SketchUp** before importing them into
-**Revit** (or any BIM tool). One drag-and-drop, one output file.
+Reduz e limpa arquivos **IFC exportados do SketchUp** antes de importar no **Revit**.
+Um arrastar-e-soltar, um arquivo de saída.
 
-Real-world case: an underground parking level went from **1,156 MB → 192 MB**
-(**83% smaller**) with the architecture, the structure and the referential
-integrity of the file fully intact.
+Caso real: um subsolo de garagem saiu de **1.156 MB → 192 MB** (**83% menor**),
+mantendo intactas a arquitetura, a estrutura e a integridade referencial do arquivo.
 
-*Leia em [português](README.pt-BR.md).*
-
----
-
-## Why SketchUp IFC exports are so big
-
-A SketchUp export (faceted BREP, IFC2X3) has two problems:
-
-1. **Entourage** — furniture, cars, vegetation and decoration are exported as
-   hyper-detailed `IfcBuildingElementProxy` objects. They are useless in a Revit
-   base model and they hold most of the mesh.
-2. **Duplicated vertices** — every vertex of every face becomes a brand-new
-   `IfcCartesianPoint`, with zero reuse. Pure bloat.
-
-This tool attacks both, in a single pass.
+*Read this in [English](README.en.md).*
 
 ---
 
-## Usage
+## Por que o IFC do SketchUp fica gigante
 
-**Drag your `.ifc` file onto `processar_ifc.bat`** (Windows).
+Export do SketchUp (faceted BREP, IFC2X3) tem dois problemas:
 
-A single new file appears next to the original:
+1. **Entourage** — móveis, carros, vegetação e decoração saem como
+   `IfcBuildingElementProxy` hiper-detalhados. Não servem numa base de Revit e
+   concentram a maior parte das faces.
+2. **Vértices duplicados** — cada vértice de cada face vira um `IfcCartesianPoint`
+   novo, sem nenhum reaproveitamento. Infla o arquivo sem nenhum ganho.
 
-```
-YOUR_FILE.ifc         (original, untouched)
-YOUR_FILE_limpo.ifc   <-- import this one
-```
-
-> Requirement: **Python 3** on your PATH (`python --version` must work).
-> No third-party packages — standard library only.
-
-From a terminal (any OS):
-
-```bash
-python limpar_ifc.py "/path/to/YOUR_FILE.ifc"
-```
-
-> Note: the console output and the code comments are in **Brazilian Portuguese**,
-> the author's language. The tool itself is language-agnostic.
+Este script ataca os dois, numa passada só.
 
 ---
 
-## How it works
+## Uso (arrastar e soltar)
 
-`limpar_ifc.py` reads the file in **three streaming passes** and writes it **once**:
+**Arraste o seu arquivo `.ifc` sobre `processar_ifc.bat`.**
 
-| # | Pass | What it does |
-|---|------|--------------|
-| 1 | Analyze | Measures face count, bounding box and number of copies of every proxy; decides what counts as entourage. Read-only. |
-| 2 | Map | Finds identical `IfcCartesianPoint`s (rounded to 6 decimals) that can be merged — **ignoring points that belong to entourage**, since those are about to disappear. |
-| 3 | Write | Writes the cleaned file: entourage proxies and their geometry gone, relationships repaired (`IfcRelContainedInSpatialStructure` / `IfcRelDefinesByProperties`), vertices merged. Finally it checks that no `#id` reference was left dangling — and aborts with an error if one is. |
+Ao lado do original aparece **um único arquivo novo**:
 
-Vertex deduplication is **lossless**: same mesh, same face and object count.
+```
+SEU_ARQUIVO.ifc         (original, intacto)
+SEU_ARQUIVO_limpo.ifc   <-- ESTE vai para o Revit
+```
 
-### Why entourage before dedup?
+No fim aparece um resumo `MB original → MB final (% de redução)`.
 
-In the **original** file each object occupies a contiguous, self-contained block of
-IDs, so an entire object can be deleted safely. After deduplication points become
-**shared** between objects, and deleting one object would tear geometry out of
-another. Hence the fixed order: **entourage → dedup**. Both happen during the same
-write, so the intermediate file never hits the disk.
+> Requisito: **Python 3** instalado e no PATH (`python --version` deve funcionar).
+> Nenhuma dependência externa — só biblioteca padrão.
 
-### What is preserved
+Pela linha de comando dá no mesmo:
 
-`IfcBeam`, `IfcRailing`, `IfcDoor`, building storeys, property sets, and the large
-architectural proxies (ramps, walls, terrain).
+```bat
+processar_ifc.bat "C:\caminho\SEU_ARQUIVO.ifc"
+python limpar_ifc.py "C:\caminho\SEU_ARQUIVO.ifc"
+```
 
-### Entourage detection rule (deliberately conservative)
+---
 
-An object is removed when it is:
+## O que ele faz (e por quê)
 
-- **scattered garbage** — largest dimension ≥ `MAXDIM_LIXO` m. This is "exploded"
-  SketchUp geometry: loose faces and vertices spread over hundreds of metres or
-  kilometres. In Revit it shows up as a cloud of specks that swallows the scene.
-  No real building element comes close to that size, so it is always safe to drop; or
-- **repeated and small** — belongs to a family with ≥ `MIN_COPIAS` copies and its
-  largest dimension is ≤ `MAXDIM_REPETIDO` m (fixture, car, plant, furniture); or
-- **small and very dense** — ≥ `MIN_FACES_DENSO` faces and ≤ `MAXDIM_DENSO` m
-  (hyper-detailed decoration); or
-- **small** — largest dimension ≤ `MAXDIM_MANTER` m (loose furniture/objects).
+`limpar_ifc.py` lê o arquivo em **três passadas de streaming** e escreve **uma vez**:
 
-The thresholds live at the top of `limpar_ifc.py` and are meant to be tuned:
+| # | Passada | O que faz |
+|---|---------|-----------|
+| 1 | Analisar | Mede faces, bounding box e nº de cópias de cada proxy; decide o que é entourage. Só leitura. |
+| 2 | Mapear | Encontra os `IfcCartesianPoint` idênticos (arredondados a 6 casas) que podem ser fundidos — **ignorando os pontos do entourage**, que vão sumir. |
+| 3 | Escrever | Grava o `_limpo.ifc`: sem os proxies de entourage nem a geometria deles, com as relações corrigidas (`IfcRelContainedInSpatialStructure` / `IfcRelDefinesByProperties`) e com os vértices fundidos. Ao final, confere que nenhuma referência `#id` ficou órfã — se ficar, aborta com erro. |
+
+O dedup é **lossless**: mesma malha, mesmo nº de faces e objetos.
+
+### Por que entourage ANTES do dedup?
+
+No arquivo **original**, cada objeto ocupa um bloco de IDs contíguos e
+autossuficientes — dá para apagar um objeto inteiro com segurança. Depois do dedup
+os pontos passam a ser **compartilhados** entre objetos, então apagar um objeto
+poderia derrubar geometria de outro. Por isso a ordem é fixa: **entourage → dedup**.
+As duas etapas acontecem na mesma escrita, então o intermediário nunca vai pro disco.
+
+### O que é preservado
+
+`IfcBeam` (vigas), `IfcRailing` (guarda-corpos), `IfcDoor` (portas), os pavimentos,
+as propriedades e os proxies arquitetônicos grandes (rampa, paredes, terreno).
+
+### Regra automática de entourage (conservadora)
+
+Um objeto é removido se for:
+
+- **lixo disperso** — maior dimensão ≥ `MAXDIM_LIXO` m. É geometria "explodida" do
+  SketchUp (faces/vértices soltos espalhados por centenas de metros ou quilômetros).
+  Aparece no Revit como uma "chuva"/nuvem de pontos que engole a cena e some com o
+  prédio real. Nenhum elemento de um prédio chega perto disso, então é seguro; ou
+- **repetido e pequeno** — faz parte de família com ≥ `MIN_COPIAS` cópias e maior
+  dimensão ≤ `MAXDIM_REPETIDO` m (fixture/carro/planta/móvel); ou
+- **pequeno e muito denso** — ≥ `MIN_FACES_DENSO` faces e ≤ `MAXDIM_DENSO` m
+  (decoração/móvel hiper-detalhado); ou
+- **pequeno** — maior dimensão ≤ `MAXDIM_MANTER` m (móvel/objeto avulso).
+
+Esses parâmetros ficam no topo de `limpar_ifc.py` e podem ser ajustados:
 
 ```python
-MIN_COPIAS      = 3     # repeated family with at least N copies
-MAXDIM_REPETIDO = 4.5   # m  (small/medium repeated objects = entourage)
+MIN_COPIAS      = 3     # família repetida com pelo menos N cópias
+MAXDIM_REPETIDO = 4.5   # m  (repetidos pequenos/médios = entourage)
 MIN_FACES_DENSO = 30000
-MAXDIM_DENSO    = 2.5   # m  (small + very detailed = decoration)
-MAXDIM_MANTER   = 3.0   # m  (proxies smaller than this are removed)
-MAXDIM_LIXO     = 150.0 # m  (absurd bbox = scattered garbage, always removed)
-TOL_DECIMAIS    = 6     # decimal places used to merge vertices (mm)
+MAXDIM_DENSO    = 2.5   # m  (objeto pequeno e muito detalhado = decoração)
+MAXDIM_MANTER   = 3.0   # m  (proxies menores que isto são removidos)
+MAXDIM_LIXO     = 150.0 # m  (bbox absurdo = geometria dispersa/lixo, removido sempre)
+TOL_DECIMAIS    = 6     # casas decimais para fundir vértices (mm)
 ```
 
 ---
 
-## Options
+## Casos especiais
 
-### Preview without writing
+### Previsualizar sem escrever
 
-Prints the report (what would be removed and why, plus the biggest objects that
-would survive) and **writes nothing**:
+Mostra o relatório (o que seria removido, e os maiores objetos que ficariam) e
+**não gera arquivo nenhum**:
 
-```bash
-python limpar_ifc.py "YOUR_FILE.ifc" --preview
+```bat
+python limpar_ifc.py "SEU_ARQUIVO.ifc" --preview
 ```
 
-Use it whenever you suspect the automatic rule is about to delete something you
-want to keep.
+Use quando desconfiar que o automático vai apagar algo que você quer manter.
 
-### Manual GUID list
+### Lista manual de GUIDs
 
-To remove exactly the objects you picked instead of using the automatic rule, put
-one GUID per line in a text file:
+Para remover exatamente os objetos que você escolheu, em vez da regra automática,
+crie um `guids.txt` com um GUID por linha e use:
 
-```bash
-python limpar_ifc.py "YOUR_FILE.ifc" --guids guids.txt
+```bat
+python limpar_ifc.py "SEU_ARQUIVO.ifc" --guids guids.txt
 ```
 
-(GUIDs are printed in both report tables — run with `--preview` first to collect them.)
+(Os GUIDs aparecem nas duas tabelas do relatório — rode com `--preview` primeiro
+para pegá-los.)
 
 ---
 
-## Files
+## Arquivos desta pasta
 
-| File | Role |
-|------|------|
-| `processar_ifc.bat` | Windows drag-and-drop entry point. |
-| `limpar_ifc.py` | Everything: entourage removal + dedup + integrity check. |
+| Arquivo | Papel |
+|---------|-------|
+| `processar_ifc.bat` | Entrada arrastar-e-soltar (chama o `.py`). |
+| `limpar_ifc.py` | Tudo: entourage + dedup + verificação de integridade. |
 
-**CPython 3, standard library only, fully streaming** — handles files well over 1 GB.
+**CPython 3, só biblioteca padrão, em streaming** — aguenta arquivos de mais de 1 GB.
 
 ---
 
-## Caveats
+## Avisos
 
-- Tuned for **SketchUp's IFC2X3 faceted-BREP export**, which writes one entity per
-  line and keeps each object in a contiguous ID block. Exports from other tools may
-  not satisfy those assumptions.
-- The original file is never modified, but **always keep a backup** and open the
-  result before trusting it. The integrity check proves no reference is dangling —
-  it cannot prove the removal rule matched your intent. That is what `--preview` is for.
+- Feito para o **export IFC2X3 faceted-BREP do SketchUp**, que grava uma entidade por
+  linha e mantém cada objeto num bloco contíguo de IDs. Exports de outras ferramentas
+  podem não satisfazer essas premissas.
+- O original nunca é modificado, mas **sempre mantenha backup** e abra o resultado
+  antes de confiar nele. A verificação de integridade prova que nenhuma referência
+  ficou órfã — ela não prova que a regra de remoção acertou a sua intenção. É para
+  isso que serve o `--preview`.
 
-## License
+## Licença
 
 [MIT](LICENSE) © Leonardo Marinho Côrtes
