@@ -1,0 +1,17 @@
+# IFC models are large and often confidential — never commit them
+*.ifc
+
+# Reports / scratch output
+*.csv
+guids.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
