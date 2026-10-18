@@ -140,6 +140,29 @@ para pegá-los.)
 
 ---
 
+## IFC exportado do Revit: `simplificar_revit_ifc.py`
+
+O `limpar_ifc.py` não serve para IFC do **Revit** (outra estrutura de arquivo). Quando
+o peso vem de famílias de biblioteca super-detalhadas — típico das portas/janelas
+**venezianas da Blocks**, em que cada palheta de 50 × 2 × 0,3 cm vem com ~3.400
+triângulos — use:
+
+```bash
+python simplificar_revit_ifc.py "C:\caminho\ARQUIVO.ifc"
+```
+
+Gera `ARQUIVO_leve.ifc`. Ele acha as peças soltas que são **placas finas retangulares
+e pesadas** (palhetas, ripas, lâminas: ≤ 2 cm de espessura, ≥ 500 triângulos, forma e
+contorno de caixa) e troca cada uma pela sua caixa orientada exata (12 triângulos).
+Nada mais muda: elementos, GUIDs, Psets, materiais, estilos, aberturas e pavimentos
+ficam idênticos, e o script confere integridade e GUIDs no final.
+
+Caso real: 314 MB → 48 MB; faces somando todas as instâncias (o que o Revit monta)
+5,55 mi → 326 mil (−94%), sem diferença visível. Requer `ifcopenshell`, `numpy`, `scipy`.
+`--preview` mostra o relatório sem gravar.
+
+---
+
 ## Avisos
 
 - Feito para o **export IFC2X3 faceted-BREP do SketchUp**, que grava uma entidade por
