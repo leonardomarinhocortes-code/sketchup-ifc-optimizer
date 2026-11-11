@@ -38,6 +38,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.csgraph as cg
 import ifcopenshell
+import ifcopenshell.util.unit
 
 # ----- criterio de "placa fina" (palheta/ripa/lamina) -----
 MIN_FACES_ITEM = 1000   # so analisa geometrias com pelo menos N faces
@@ -48,6 +49,8 @@ ALONGAMENTO_MIN = 5.0   # maior dimensao >= 5x a espessura
 AREA_MIN, AREA_MAX = 0.90, 1.05  # area da malha / area da caixa (forma de caixa)
 DESVIO_MAX = 0.15       # 95% dos vertices a menos de 15% da espessura da face da caixa
 SILHUETA_MIN = 0.98     # contorno visto de frente preenche >= 98% do retangulo
+ESCALA = 1.0            # unidade de comprimento do arquivo -> metro (lida do IFC:
+                        # o Revit pode exportar em cm/mm; sem isso nada passa no criterio)
 
 REF = re.compile(r'#(\d+)')
 HEAD = re.compile(r'^#(\d+)\s*=\s*([A-Z0-9]+)\(')
@@ -126,7 +129,7 @@ def e_placa_fina(P, Ti):
         return None
     c, E, lo, hi, L = caixa_orientada(vs)
     ext = hi - lo
-    if not (ext[2] <= ESPESSURA_MAX and ext[0] >= ALONGAMENTO_MIN * max(ext[2], 1e-9)):
+    if not (ext[2] * ESCALA <= ESPESSURA_MAX and ext[0] >= ALONGAMENTO_MIN * max(ext[2], 1e-9)):
         return None
     area_box = 2 * (ext[0] * ext[1] + ext[1] * ext[2] + ext[0] * ext[2])
     a = P[Ti]
@@ -285,8 +288,10 @@ def main():
     t0 = time.time()
     print('\n[1/4] Abrindo...')
     f = ifcopenshell.open(original)
+    global ESCALA
+    ESCALA = ifcopenshell.util.unit.calculate_unit_scale(f)
     guids_antes = {p.GlobalId: p.is_a() for p in f.by_type('IfcRoot')}
-    print('      %d entidades com GUID' % len(guids_antes))
+    print('      %d entidades com GUID (unidade: 1 = %g m)' % (len(guids_antes), ESCALA))
 
     print('\n[2/4] Procurando palhetas/ripas/laminas super-detalhadas...')
     rel, candidatos, ta, td = simplificar(f, preview)
